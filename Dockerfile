@@ -12,7 +12,8 @@ RUN apt-get update \
     zip \
   && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g openclaw@2026.3.2
+ARG OPENCLAW_VERSION=latest
+RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 
 WORKDIR /app
 
@@ -36,7 +37,7 @@ ENV HOMEBREW_CELLAR="/home/linuxbrew/.linuxbrew/Cellar"
 ENV HOMEBREW_REPOSITORY="/home/linuxbrew/.linuxbrew/Homebrew"
 
 ENV PORT=8080
-ENV OPENCLAW_ENTRY=/usr/local/lib/node_modules/openclaw/dist/entry.js
+ENV OPENCLAW_ENTRY=/usr/local/lib/node_modules/openclaw/openclaw.mjs
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \

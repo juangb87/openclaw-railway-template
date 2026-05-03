@@ -12,7 +12,7 @@ RUN apt-get update \
     zip \
   && rm -rf /var/lib/apt/lists/*
 
-ARG OPENCLAW_VERSION=2026.4.29
+ARG OPENCLAW_VERSION=2026.5.2
 RUN npm install -g "openclaw@${OPENCLAW_VERSION}"
 
 WORKDIR /app

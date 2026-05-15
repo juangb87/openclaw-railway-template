@@ -1,5 +1,3 @@
-FROM node:24-bookworm
-
 ARG OPENCLAW_VERSION=2026.5.12
 ENV PORT=8080
 ENV OPENCLAW_ENTRY=/usr/local/lib/node_modules/openclaw/openclaw.mjs
@@ -28,9 +26,13 @@ COPY src ./src
 COPY --chmod=755 entrypoint.sh ./entrypoint.sh
 
 RUN useradd -m -s /bin/bash openclaw \
-  && chown -R openclaw:openclaw /app \
-  && mkdir -p /data \
-  && chown -R openclaw:openclaw /data
+  && mkdir -p /data /home/openclaw/.npm /home/openclaw/.cache \
+  && chown -R openclaw:openclaw \
+    /app \
+    /data \
+    /home/openclaw \
+    /usr/local/lib/node_modules \
+  && find /usr/local/bin -maxdepth 1 -xtype l -name 'openclaw*' -exec chown -h openclaw:openclaw {} +
 
 EXPOSE 8080
 

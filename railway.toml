@@ -1,4 +1,3 @@
-[build]
 builder = "dockerfile"
 
 [deploy]
@@ -7,4 +6,4 @@ healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 
 [variables]
-PORT = "18789"
+INTERNAL_GATEWAY_PORT = "18789"

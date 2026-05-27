@@ -7,6 +7,7 @@ ENV OPENCLAW_ENTRY=/usr/local/lib/node_modules/openclaw/openclaw.mjs
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates \
+    chromium \
     curl \
     git \
     gosu \
@@ -29,7 +30,8 @@ COPY src ./src
 COPY --chmod=755 entrypoint.sh ./entrypoint.sh
 
 RUN useradd -m -s /bin/bash openclaw \
-  && mkdir -p /data /home/openclaw/.npm /home/openclaw/.cache \
+  && mkdir -p /data /home/openclaw/bin /home/openclaw/.npm /home/openclaw/.cache \
+  && ln -sf /usr/bin/chromium /home/openclaw/bin/chromium \
   && chown -R openclaw:openclaw \
     /app \
     /data \

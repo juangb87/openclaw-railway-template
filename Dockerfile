@@ -1,6 +1,6 @@
-FROM node:24-bookworm
+FROM node:24.18.1-bookworm
 
-ARG OPENCLAW_VERSION=2026.6.11
+ARG OPENCLAW_VERSION=2026.9.2
 ENV PORT=8080
 ENV OPENCLAW_ENTRY=/usr/local/lib/node_modules/openclaw/openclaw.mjs
 

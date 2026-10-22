@@ -124,6 +124,14 @@ const TUI_IDLE_TIMEOUT_MS = Number.parseInt(
   process.env.TUI_IDLE_TIMEOUT_MS ?? "300000",
   10,
 );
+// Gateway startup can take ~90s (plugin load), and a redeploy can be blocked
+// for up to 5 min by the previous container's gateway-owner lease.
+const GATEWAY_READY_TIMEOUT_MS = Number.parseInt(
+  process.env.GATEWAY_READY_TIMEOUT_MS ?? "300000",
+  10,
+);
+const GATEWAY_RETRY_DELAY_MS = 15_000;
+const GATEWAY_MAX_RETRY_MS = 10 * 60_000;
 const TUI_MAX_SESSION_MS = Number.parseInt(
   process.env.TUI_MAX_SESSION_MS ?? "1800000",
   10,
@@ -179,11 +187,15 @@ function sleep(ms) {
 }
 
 async function waitForGatewayReady(opts = {}) {
-  const timeoutMs = opts.timeoutMs ?? 60_000;
+  const timeoutMs = opts.timeoutMs ?? GATEWAY_READY_TIMEOUT_MS;
   const start = Date.now();
   const endpoints = ["/openclaw", "/openclaw", "/", "/health"];
 
   while (Date.now() - start < timeoutMs) {
+    if (!gatewayProc) {
+      log.warn("gateway", "process exited before becoming ready");
+      return false;
+    }
     for (const endpoint of endpoints) {
       try {
         const res = await fetch(`${GATEWAY_TARGET}${endpoint}`, {
@@ -249,19 +261,23 @@ async function startGateway() {
   log.info("gateway", `WORKSPACE_DIR: ${WORKSPACE_DIR}`);
   log.info("gateway", `config path: ${configPath()}`);
 
-  gatewayProc.on("error", (err) => {
+  const proc = gatewayProc;
+
+  proc.on("error", (err) => {
     log.error("gateway", `spawn error: ${String(err)}`);
-    gatewayProc = null;
+    if (gatewayProc === proc) gatewayProc = null;
   });
 
-  gatewayProc.on("exit", (code, signal) => {
+  proc.on("exit", (code, signal) => {
     log.error("gateway", `exited code=${code} signal=${signal}`);
+    // A restart may already have spawned a replacement; don't clobber it.
+    if (gatewayProc !== proc && gatewayProc !== null) return;
     gatewayProc = null;
     if (!shuttingDown && isConfigured()) {
       log.info("gateway", "scheduling auto-restart in 2s...");
       setTimeout(() => {
         if (!shuttingDown && !gatewayProc && isConfigured()) {
-          ensureGatewayRunning().catch((err) => {
+          ensureGatewayRunningWithRetry().catch((err) => {
             log.error("gateway", `auto-restart failed: ${err.message}`);
           });
         }
@@ -277,7 +293,7 @@ async function ensureGatewayRunning() {
     gatewayStarting = (async () => {
       await syncAllowedOrigins();
       await startGateway();
-      const ready = await waitForGatewayReady({ timeoutMs: 60_000 });
+      const ready = await waitForGatewayReady();
       if (!ready) {
         throw new Error("Gateway did not become ready in time");
       }
@@ -287,6 +303,33 @@ async function ensureGatewayRunning() {
   }
   await gatewayStarting;
   return { ok: true };
+}
+
+// Keeps retrying (e.g. while the old container's lease is still active)
+// instead of giving up until the next HTTP request triggers a start.
+let gatewayRetrying = null;
+
+function ensureGatewayRunningWithRetry() {
+  if (gatewayRetrying) return gatewayRetrying;
+  gatewayRetrying = (async () => {
+    const start = Date.now();
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await ensureGatewayRunning();
+      } catch (err) {
+        if (shuttingDown || Date.now() - start > GATEWAY_MAX_RETRY_MS) throw err;
+        log.warn(
+          "gateway",
+          `start attempt ${attempt} failed: ${err.message}; retrying in ${GATEWAY_RETRY_DELAY_MS / 1000}s`,
+        );
+        await sleep(GATEWAY_RETRY_DELAY_MS);
+        if (shuttingDown) throw err;
+      }
+    }
+  })().finally(() => {
+    gatewayRetrying = null;
+  });
+  return gatewayRetrying;
 }
 
 function isGatewayStarting() {
@@ -1189,7 +1232,7 @@ const server = app.listen(PORT, () => {
       } catch (err) {
         log.warn("wrapper", `doctor --fix failed: ${err.message}`);
       }
-      await ensureGatewayRunning();
+      await ensureGatewayRunningWithRetry();
     })().catch((err) => {
       log.error("wrapper", `failed to start gateway at boot: ${err.message}`);
     });

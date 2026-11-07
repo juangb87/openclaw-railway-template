@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { setWebSocketProxyOrigin } from "./proxy-origin.js";
+
 import express from "express";
 import httpProxy from "http-proxy";
 import pty from "node-pty";
@@ -1183,7 +1185,7 @@ proxy.on("proxyReq", (proxyReq, req, res) => {
 
 proxy.on("proxyReqWs", (proxyReq, req, socket, options, head) => {
   proxyReq.setHeader("Authorization", `Bearer ${OPENCLAW_GATEWAY_TOKEN}`);
-  proxyReq.setHeader("Origin", PROXY_ORIGIN);
+  setWebSocketProxyOrigin(proxyReq, req, PROXY_ORIGIN);
 });
 
 app.use(async (req, res) => {
